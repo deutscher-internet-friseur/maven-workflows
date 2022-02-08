@@ -2,6 +2,11 @@ name: Maven Release
 
 on: 
   workflow_call:
+    secrets:
+      ARTIFACTORY_USER:
+        required: true
+      ARTIFACTORY_PASSWORD:
+        required: true
 
 jobs:
   build:
