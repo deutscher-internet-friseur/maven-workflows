@@ -74,5 +74,4 @@ jobs:
 
     - name: Push der nächsten Entwicklungsversion
       run: |
-        git push -u origin $BRANCH_NAME
         git push origin "$RELEASE_VERSION"
