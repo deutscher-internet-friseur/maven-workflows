@@ -1,0 +1,42 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://help.github.com/actions/language-and-framework-guides/building-and-testing-java-with-maven
+
+name: Maven-Snapshot-Build
+
+on:
+workflow_call:
+    secrets:
+    ARTIFACTORY_USER:
+      required: true
+    ARTIFACTORY_PASSWORD:
+      required: true
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 8
+      uses: actions/setup-java@v2
+      with:
+        java-version: '8'
+        distribution: 'adopt'
+        cache: maven
+        
+    - name: Erzeuge Maven settings.xml
+      # You may pin to the exact commit or the version.
+      # uses: s4u/maven-settings-action@902651b0f8e6e470107a6eee701f30f4f0986fbe
+      uses: s4u/maven-settings-action@v2.4.1
+      with:
+        # servers definition in json array, eg: [{"id": "serverId", "username": "username", "password": "password"}]
+        servers: '[{"id": "artifactory", "username": "${env.MAVEN_USERNAME}", "password": "${env.MAVEN_PASSWORD}"}]'
+        # mirrors definition in json array, eg: [{"id": "id", "name": "name", "mirrorOf": "mirrorOf", "url": "url"}]
+        mirrors: '[{"id": "other", "name": "other", "mirrorOf": "!central", "url": "https://internetfriseur.jfrog.io/artifactory/default-maven-virtual"}]' 
+        
+    - name: Build with Maven
+      run: mvn -B -T 4 deploy -DaltDeploymentRepository=artifactory::default::https://internetfriseur.jfrog.io/artifactory/default-maven-virtual
+        env:
+         MAVEN_USERNAME: ${{ secrets.ARTIFACTORY_USER }}
+         MAVEN_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
