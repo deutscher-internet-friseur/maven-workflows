@@ -1,0 +1,102 @@
+name: Maven Beta
+
+on: 
+  workflow_call:
+    secrets:
+      ARTIFACTORY_USER:
+        required: true
+      ARTIFACTORY_PASSWORD:
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Konfigure JDK 8
+      uses: actions/setup-java@v2
+      with:
+        java-version: '8'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Erzeuge Maven settings.xml
+      # You may pin to the exact commit or the version.
+      # uses: s4u/maven-settings-action@902651b0f8e6e470107a6eee701f30f4f0986fbe
+      uses: s4u/maven-settings-action@v2.4.1
+      with:
+        # servers definition in json array, eg: [{"id": "serverId", "username": "username", "password": "password"}]
+        servers: '[{"id": "artifactory", "username": "${env.MAVEN_USERNAME}", "password": "${env.MAVEN_PASSWORD}"}]'
+        # mirrors definition in json array, eg: [{"id": "id", "name": "name", "mirrorOf": "mirrorOf", "url": "url"}]
+        mirrors: '[{"id": "other", "name": "other", "mirrorOf": "!central", "url": "https://internetfriseur.jfrog.io/artifactory/default-maven-virtual"}]'     
+      
+    - name: Bestimme aktuellen Branch
+      id: branch-name
+      uses: tj-actions/branch-names@v5.1
+      
+    - name: Bestimme aktuelle Version
+      run: |
+        echo VERSION=$( mvn help:evaluate -Dexpression=project.version -q -DforceStdout ) >> $GITHUB_ENV
+        
+    - name: Bestimme den Namen für den Release-Branch
+      run: |
+        echo BRANCH_NAME=$( echo $VERSION | perl -lne '@x=split /\./; print "release-$x[0].$x[1]"' ) >> $GITHUB_ENV
+        
+    - name: Bestimme verschiedene Umgebungsvariablen
+      run: |
+        echo RELEASE_VERSION=$( echo $VERSION | perl -pe 's/-SNAPSHOT/-BETA/') >> $GITHUB_ENV
+        echo NEXT_DEV_VERSION=$( echo $VERSION | perl -lne '@x=split /\./; print "$x[0].$x[1]." . ($x[2]+1) . "-SNAPSHOT"') >> $GITHUB_ENV
+        echo REMOTE_BRANCH=$(git ls-remote --heads origin $BRANCH_NAME) >> $GITHUB_ENV
+        echo CURRENT_BRANCH=${{ steps.branch-name.outputs.current_branch }} >> $GITHUB_ENV
+      
+    - name: Überprüfe, ob es den Branch schon gibt
+      if:   contains(env.REMOTE_BRANCH, env.BRANCH_NAME)  && !contains(env.CURRENT_BRANCH,env.BRANCH_NAME)
+      run: |
+        echo "Es gibt schon $BRANCH_NAME und es ist nicht der aktuelle Branch. Bitte diesen löschen oder auf ihn wechseln."
+        exit 1
+      
+    - name: Konfiguriere Git
+      run: |
+        git --version
+        git config user.name "DevOps-Bot"
+        git config user.email "<>"
+        git status
+        
+    - name: Wechsele auf den neuen Branch
+      run: |
+         git checkout -b $BRANCH_NAME
+        
+    - name: Versionsnummer auf Release-Version ändern und Versionen updaten
+      run: |
+        mvn -B versions:set -DnewVersion=$RELEASE_VERSION
+        mvn -B versions:use-releases -DfailIfNotReplaced=true
+        
+    - name: Commit und Tag der Release-Version
+      run: |
+        git add pom.xml
+        git commit -m "Update der Version von $VERSION auf $RELEASE_VERSION"
+        git tag -a "$RELEASE_VERSION" -m "Release von $RELEASE_VERSION"
+         
+    - name: Nach Artifactory deployen
+      run: mvn -B -T 4 deploy -DaltDeploymentRepository=artifactory::default::https://internetfriseur.jfrog.io/artifactory/default-maven-virtual
+      env:
+         MAVEN_USERNAME: ${{ secrets.ARTIFACTORY_USER }}
+         MAVEN_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
+
+    - name: Auf nächste Entwicklungsversion setzen
+      run: |
+        mvn versions:set -DnewVersion=$NEXT_DEV_VERSION
+        
+    - name: Push der nächsten Entwicklungsversion
+      run: |
+        git add pom.xml
+        git commit -m "Update der Version von $RELEASE_VERSION auf $NEXT_DEV_VERSION"
+        git push -u origin $BRANCH_NAME
+        git push origin "$RELEASE_VERSION"
+        
+    - name: Pull-Request erzeugen
+      run: gh pr create --fill
+      env:
+         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
