@@ -37,6 +37,6 @@ jobs:
         
     - name: Build with Maven
       run: mvn -B -T 4 deploy -DaltDeploymentRepository=artifactory::default::https://internetfriseur.jfrog.io/artifactory/default-maven-virtual
-        env:
+      env:
          MAVEN_USERNAME: ${{ secrets.ARTIFACTORY_USER }}
          MAVEN_PASSWORD: ${{ secrets.ARTIFACTORY_PASSWORD }}
