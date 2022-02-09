@@ -3,13 +3,13 @@
 
 name: Maven-Snapshot-Build
 
-on:
-workflow_call:
+on: 
+  workflow_call:
     secrets:
-    ARTIFACTORY_USER:
-      required: true
-    ARTIFACTORY_PASSWORD:
-      required: true
+      ARTIFACTORY_USER:
+        required: true
+      ARTIFACTORY_PASSWORD:
+        required: true
 
 jobs:
   build:
@@ -35,7 +35,7 @@ jobs:
         # mirrors definition in json array, eg: [{"id": "id", "name": "name", "mirrorOf": "mirrorOf", "url": "url"}]
         mirrors: '[{"id": "other", "name": "other", "mirrorOf": "!central", "url": "https://internetfriseur.jfrog.io/artifactory/default-maven-virtual"}]' 
         
-    - name: Build with Maven
+    - name: Snapshot mit Maven bauen und deployen
       run: mvn -B -T 4 deploy -DaltDeploymentRepository=artifactory::default::https://internetfriseur.jfrog.io/artifactory/default-maven-virtual
       env:
          MAVEN_USERNAME: ${{ secrets.ARTIFACTORY_USER }}
